@@ -14,6 +14,8 @@ These diagrams help explain the robot system, behaviour, and workflow for both t
 
 ### 2. `system_architecture.png` / `.pdf`
 
+<img width="1134" height="484" alt="image" src="https://github.com/user-attachments/assets/c7b67beb-eb71-4798-9b7e-2d8c51842740" />
+
 - **Purpose:** Shows the **Sense → Process → Decide → Act** flow.
 - Illustrates how sensor data flows to the controller, triggers decision logic, and drives actuators.
 
