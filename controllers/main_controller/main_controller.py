@@ -163,6 +163,6 @@ def main():
         elif action == "STOP":
             movement.stop(left_motor, right_motor)
 
-# PROGRAM ENTRY POINT
+
 if __name__ == "__main__":
     main()
