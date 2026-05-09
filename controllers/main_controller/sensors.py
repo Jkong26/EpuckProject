@@ -54,6 +54,5 @@ class Sensors:
             left_enc, right_enc = self.encoders
             data["enc_left"] = left_enc.getValue()
             data["enc_right"] = right_enc.getValue()
-        
-        # Return all sensor information
+
         return data
