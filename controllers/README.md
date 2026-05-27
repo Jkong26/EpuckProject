@@ -10,7 +10,7 @@ All controller implementation files are located inside the `main_controller/` su
 
 ---
 
-## 📁 Folder Structure
+## Folder Structure
 
 **controllers/:**
 
@@ -103,7 +103,7 @@ All controller implementation files are located inside the `main_controller/` su
 
 ---
 
-## ⚠️ Important Notes
+## Important Notes
 
 - All modules must use **consistent naming**:
   - FSM states (e.g. `"MOVE_FORWARD"`)
@@ -113,7 +113,7 @@ All controller implementation files are located inside the `main_controller/` su
 
 ---
 
-## 🔀 Git Workflow
+##  Git Workflow
 
 - Each team member works mainly on their assigned module:
   - FSM → `fsm.py`
@@ -124,4 +124,4 @@ All controller implementation files are located inside the `main_controller/` su
 
 ---
 
-## 🚀 How It Works (High-Level)
+
