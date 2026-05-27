@@ -26,7 +26,7 @@ All controller implementation files are located inside the `main_controller/` su
 
 ---
 
-## 📄 File Overview
+## File Overview
 
 ### 1. `main_controller/main_controller.py`
 
