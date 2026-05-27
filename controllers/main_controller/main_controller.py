@@ -4,144 +4,167 @@ from fsm import FSM
 import movement
 from config import *
 
+# -------------------------
 # GOAL DETECTION FUNCTION
+# -------------------------
+# Detects whether the camera is currently seeing the green goal area
 def detect_goal(camera):
-    """
-    Detect green goal area using camera image.
-    Checks pixels near the center of the screen.
-    """
-    # Get image from camera
+    # Capture image from camera
     image = camera.getImage()
 
-    # Camera dimensions
+    # Get camera dimensions
     width = camera.getWidth()
     height = camera.getHeight()
 
+    # Counters for green pixel detection
     green_count = 0
     total = 0
 
-    # Scan small center region
+    # Scan a small region around the image center, instead of checking the whole image
     for dx in range(-5, 6):
         for dy in range(-4, 5):
 
-            # Current pixel coordinates
+            # Pixel coordinates near image center
             cx = width // 2 + dx
             cy = height // 2 + dy
 
-            # Get RGB values
+            # Extract RGB colour values from the current pixel
             r = camera.imageGetRed(image, width, cx, cy)
             g = camera.imageGetGreen(image, width, cx, cy)
             b = camera.imageGetBlue(image, width, cx, cy)
 
             total += 1
-
-            # Check if pixel is mostly green
+            
+            # Detect "green-dominant" pixels
             if g > r + 15 and g > b + 15:
                 green_count += 1
-    # Safety check
+    # Stop if no pixels are detected
     if total == 0:
         return False
-
-    # Goal detected if enough green pixels found
+    # Goal confirmed if most center pixels are green
     return (green_count / total) > 0.65
 
-# MAIN FUNCTION
+# -------------------------
+# MAIN ROBOT PROGRAM
+# -------------------------
 def main():
-    # Create robot object
+    # Create robot instance
     robot = Robot()
 
-    # Simulation timestep
+    # Get simulation timestep
     timestep = int(robot.getBasicTimeStep())
 
+    # -------------------------
     # Camera
+    # -------------------------
     camera = robot.getDevice("camera")
     camera.enable(timestep)
 
-    # Wheel motors
+    # -------------------------
+    # MOTOR SETUP
+    # -------------------------
+    # Access wheel motors
     left_motor = robot.getDevice("left wheel motor")
     right_motor = robot.getDevice("right wheel motor")
 
+    # Enable velocity control mode
     left_motor.setPosition(float('inf'))
     right_motor.setPosition(float('inf'))
 
-    # Wheel encoders (position sensors) for motion tracking
+    # -------------------------
+    # ENCODER SETUP
+    # -------------------------
+    # Used for detecting whether the robot is stuck
     left_encoder = robot.getDevice("left wheel sensor")
     right_encoder = robot.getDevice("right wheel sensor")
+
     left_encoder.enable(timestep)
     right_encoder.enable(timestep)
 
+    # -------------------------
     # Distance sensors
+    # -------------------------
     ps = []
+    # Enable all 8 proximity sensors
     for i in range(8):
-        # Get proximity sensor
         sensor = robot.getDevice(f"ps{i}")
-        # Enable sensor
         sensor.enable(timestep)
         ps.append(sensor)
 
-    # Create sensor manager
+    # -------------------------
+    # SYSTEM INITIALISATION
+    # -------------------------
+    # Sensor processing class
     sensors = Sensors(robot, ps, encoders=(left_encoder, right_encoder))
-    # Create finite state machine
+    # Finite State Machine
     fsm = FSM()
-    # Counter for stable goal detection
-    goal_counter = 0
 
-    # MAIN ROBOT LOOP
+    # Counter used for stable goal confirmation
+    goal_counter = 0
+    
+    # -------------------------
+    # MAIN CONTROL LOOP
+    # -------------------------
     while robot.step(timestep) != -1:
         # Read all sensor values
         sensor_data = sensors.read()
 
-        
+        # -------------------------
         # GREEN DETECTION
+        # -------------------------
+        # Check if green goal is visible
         if detect_goal(camera):
-            # Increase counter if green is seen
             goal_counter += 1
         else:
-            # Reset counter if green disappears
             goal_counter = 0
 
-        # Confirm goal after several frames
+        # Goal only confirmed if seen continuously for several frames
         green_seen = goal_counter >= GOAL_CONFIRM_TIME
 
-        
-        # WALL / OBJECT TOUCH DETECTION
-        # Detect if front sensors are very close
+        # -------------------------
+        # TOUCH DETECTION 
+        # -------------------------
+        # Detect whether robot has physically, reached the wall/goal
         touching_wall = (
             sensor_data["front_left"] > GOAL_TOUCH_THRESHOLD or
             sensor_data["front_right"] > GOAL_TOUCH_THRESHOLD
         )
 
-        # Goal reached only if:
-        # 1. Green goal confirmed
-        # 2. Robot touches wall/object
+        # Goal is only confirmed when:
+        # 1. Green goal is visible
+        # 2. Robot touches the goal wall
         goal_detected = green_seen and touching_wall
 
-       
-        # STOP WHEN GOAL IS REACHED
+        # -------------------------
+        # HARD STOP AT GOAL
+        # -------------------------
         if goal_detected:
             print("GOAL REACHED")
-            # Stop robot movement
+
+            # Immediately stop motors
             movement.stop(left_motor, right_motor)
 
-            # Wait a few steps to fully stop robot
+            # Allow robot to fully stop and prevent sliding
             for _ in range(20):
                 robot.step(timestep)
 
             break
 
-        
-        # FSM DECISION MAKING
-
+        # -------------------------
+        # FSM UPDATE
+        # -------------------------
         # Update FSM state
         fsm.update(sensor_data, goal_detected)
 
-        # Get movement action from FSM
-        action, value = fsm.get_action(sensor_data)
-        
-        # Debug output
+        # Get next action from FSM
+        action, _ = fsm.get_action(sensor_data)
+
+        # Print debugging information
         print(f"{fsm.state} -> {action}", sensor_data)
 
-        # ROBOT MOVEMENT
+        # -------------------------
+        # ACTION EXECUTION
+        # -------------------------
         if action == "MOVE_FORWARD":
             movement.forward(left_motor, right_motor)
 
@@ -151,9 +174,6 @@ def main():
         elif action == "SLIGHT_LEFT":
             movement.slight_left(left_motor, right_motor)
 
-        elif action == "FORWARD":
-            movement.forward(left_motor, right_motor)
-
         elif action == "TURN_LEFT":
             movement.turn_left(left_motor, right_motor)
 
@@ -162,7 +182,6 @@ def main():
 
         elif action == "STOP":
             movement.stop(left_motor, right_motor)
-
 
 if __name__ == "__main__":
     main()

@@ -1,150 +1,139 @@
-from config import FORWARD_SPEED, SLIGHT_SPEED
+from config import *
 
-# Maximum wheel speed of the robot
-MAX_SPEED = 6.28
-
-
-# Smoothing factor for low-pass filter
-# Smaller value = smoother movement but slower reaction
-SMOOTHING_ALPHA = 0.25   # lower = smoother but slower response
-
-# Limits how much the speed can change each step
-# Helps reduce shaking / sudden jerks
-MAX_ACCEL = 0.15         # max speed change per step (removes shaking)
-
-# Small dead zones to ignore tiny movements/errors
-DEAD_ZONE_DIST = 0.02
-DEAD_ZONE_ANGLE = 1.0
-
-
-# Maximum correction allowed while turning
-CORRECTION_LIMIT = 1.5
-
-
-# Store previous motor values for smoothing
+# -------------------------
+# PREVIOUS MOTOR SPEEDS
+# -------------------------
+# Stores previous wheel speeds for smoothing and acceleration limiting
 _prev_left = 0.0
 _prev_right = 0.0
 
-
+# -------------------------
 # UTILITY FUNCTIONS
-def clamp(speed):
+# -------------------------
+def clamp(x):
     """
-    Keep speed within robot motor limits.
+    Clamp motor speed within safe limits.
+
+    Prevents motor speeds from exceeding
+    the robot's maximum allowed speed.
     """
-    return max(-MAX_SPEED, min(MAX_SPEED, speed))
+    return max(-MAX_SPEED, min(MAX_SPEED, x))
 
-
-def low_pass(new, prev):
+def smooth(target, prev):
     """
-    Apply low-pass filtering for smoother movement.
-    Blends new speed with previous speed.
+    Apply exponential smoothing.
+
+    Reduces sudden speed changes to make
+    robot movement smoother and more stable.
     """
-    return (SMOOTHING_ALPHA * new) + ((1 - SMOOTHING_ALPHA) * prev)
+    return SMOOTHING_ALPHA * target + (1 - SMOOTHING_ALPHA) * prev
 
-
-def apply_accel_limit(target, prev):
+def accel_limit(target, prev):
     """
-    Prevent sudden speed changes.
-    Makes acceleration/deceleration smoother.
+    Limit acceleration/deceleration.
+
+    Ensures wheel speeds change gradually
+    instead of instantly jumping.
     """
-    delta = target - prev
-    if delta > MAX_ACCEL:
-        delta = MAX_ACCEL
-    elif delta < -MAX_ACCEL:
-        delta = -MAX_ACCEL
-    return prev + delta
+    # Limit positive acceleration
+    diff = target - prev
+    if diff > MAX_ACCEL:
+        return prev + MAX_ACCEL
+    
+    # Limit negative acceleration
+    elif diff < -MAX_ACCEL:
+        return prev - MAX_ACCEL
+    return target
 
+# -------------------------
+# CORE DRIVE FUNCTION
+# -------------------------
+def drive(left_motor, right_motor, left_target, right_target):
+    """
+    Main drive controller.  
+    Steps:
+    1. Smooth target speeds
+    2. Limit acceleration
+    3. Clamp to safe motor range
+    4. Send final speed to motors
+    """
+    global _prev_left, _prev_right
 
-# MOVEMENT FUNCTIONS
+    # SPEED SMOOTHING
+    left = smooth(left_target, _prev_left)
+    right = smooth(right_target, _prev_right)
+
+    # ACCELERATION LIMITING
+    left = accel_limit(left, _prev_left)
+    right = accel_limit(right, _prev_right)
+
+    # SAFETY CLAMPING
+    left = clamp(left)
+    right = clamp(right)
+
+    # SAVE CURRENT SPEEDS
+    _prev_left = left
+    _prev_right = right
+
+    # APPLY TO MOTORS
+    left_motor.setVelocity(left)
+    right_motor.setVelocity(right)
+
+# -------------------------
+# MOVEMENTS 
+# -------------------------
 def forward(left_motor, right_motor):
     """
-    Move robot straight forward smoothly.
+    Move robot straight forward.
     """
-    global _prev_left, _prev_right
-
-    target = FORWARD_SPEED
-
-    _prev_left = low_pass(target, _prev_left)
-    _prev_right = low_pass(target, _prev_right)
-
-    left_motor.setVelocity(clamp(_prev_left))
-    right_motor.setVelocity(clamp(_prev_right))
-
-
-def slight_right(left_motor, right_motor):
-    """
-    Slightly turn robot to the right.
-    Right wheel moves slower than left wheel.
-    """
-    global _prev_left, _prev_right
-
-    left_target = FORWARD_SPEED
-    right_target = FORWARD_SPEED - (SLIGHT_SPEED * 0.7)
-
-    _prev_left = low_pass(left_target, _prev_left)
-    _prev_right = low_pass(right_target, _prev_right)
-
-    left_motor.setVelocity(clamp(_prev_left))
-    right_motor.setVelocity(clamp(_prev_right))
-
+    drive(left_motor, right_motor, FORWARD_SPEED, FORWARD_SPEED)
 
 def slight_left(left_motor, right_motor):
     """
-    Slightly turn robot to the left.
+    Perform a gentle left correction.
+
     Left wheel moves slower than right wheel.
+    Used for wall-following adjustments.
     """
-    global _prev_left, _prev_right
+    drive(left_motor, right_motor,
+          FORWARD_SPEED - SLIGHT_SPEED,
+          FORWARD_SPEED)
 
-    left_target = FORWARD_SPEED - (SLIGHT_SPEED * 0.7)
-    right_target = FORWARD_SPEED
+def slight_right(left_motor, right_motor):
+    """
+    Perform a gentle right correction.
 
-    _prev_left = low_pass(left_target, _prev_left)
-    _prev_right = low_pass(right_target, _prev_right)
+    Right wheel moves slower than left wheel.
+    Used for wall-following adjustments.
+    """
+    drive(left_motor, right_motor,
+          FORWARD_SPEED,
+          FORWARD_SPEED - SLIGHT_SPEED)
 
-    left_motor.setVelocity(clamp(_prev_left))
-    right_motor.setVelocity(clamp(_prev_right))
-
-
+# -------------------------
+# ARC TURNS 
+# -------------------------
 def turn_left(left_motor, right_motor):
     """
-    Rotate robot left on the spot.
+    Perform a left arc turn.
+
+    Right wheel moves faster than left wheel.
     """
-    global _prev_left, _prev_right
-
-    left_target = -1.0
-    right_target = 1.2
-
-    _prev_left = low_pass(left_target, _prev_left)
-    _prev_right = low_pass(right_target, _prev_right)
-
-    left_motor.setVelocity(clamp(_prev_left))
-    right_motor.setVelocity(clamp(_prev_right))
-
+    drive(left_motor, right_motor, 1.58, 3.64)
 
 def turn_right(left_motor, right_motor):
     """
-    Rotate robot right on the spot.
+    Perform a right arc turn.
+
+    Left wheel moves faster than right wheel.
     """
-    global _prev_left, _prev_right
+    drive(left_motor, right_motor, 3.64, 1.58)
 
-    left_target = 1.2
-    right_target = -1.0
-
-    _prev_left = low_pass(left_target, _prev_left)
-    _prev_right = low_pass(right_target, _prev_right)
-
-    left_motor.setVelocity(clamp(_prev_left))
-    right_motor.setVelocity(clamp(_prev_right))
-
-
+# -------------------------
+# STOP FUNCTION
+# -------------------------
 def stop(left_motor, right_motor):
     """
-    Stop both motors immediately.
+    Stop both robot wheels.
     """
-    global _prev_left, _prev_right
-
-    _prev_left = 0
-    _prev_right = 0
-
-    left_motor.setVelocity(0)
-    right_motor.setVelocity(0)
+    drive(left_motor, right_motor, 0.0, 0.0)

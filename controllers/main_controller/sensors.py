@@ -1,45 +1,39 @@
 class Sensors:
     def __init__(self, robot, ps, encoders=None):
-        """
-        Sensor class for reading distance sensors
-        and wheel encoder values from the robot.
-        """
+
+        # Reference to robot instance (Webots controller)
         self.robot = robot
 
-        # Proximity sensors array
+        # List of proximity sensors (ps0–ps7)
         self.ps = ps
 
-        #This is the wheel encoder values from the robot
-        self.encoders = encoders  # wheel encoders for motion tracking
+        # wheel encoders for motion tracking / stuck detection
+        self.encoders = encoders  
 
     def read(self):
-        """
-        Read all proximity sensor values and
-        return important sensor data in a dictionary.
-        """
-
-        # Get raw values from all proximity sensors
+        # Read all proximity sensor values into a list
         values = [p.getValue() for p in self.ps]
 
-        # Print raw sensor values for debugging
-        print("RAW:", values)
+        # -------------------------
+        # SENSOR MAPPING
+        # -------------------------
 
-        # Front sensors
+        # Front-left sensor (e-puck sensor index 7)
         front_left = values[7]
+
+        # Front-right sensor (e-puck sensor index 0)
         front_right = values[0]
 
-
-        # Average front distance
-        # Gives a more stable front reading
-        # Front distance: average of the two forward-facing sensors
+        # Combined front distance (average of front sensors)
         front = (values[7] + values[0]) * 0.5
 
-        # Side sensors
+        # Left side sensor
         left = values[6]
+        # Right side sensor
         right = values[1]
 
-        # Store processed sensor data
-        data = {
+        # Group the main sensor readings
+        data = {    
             "front_left": front_left,
             "front_right": front_right,
             "front": front,
@@ -47,9 +41,8 @@ class Sensors:
             "right": right
         }
 
-        # If wheel encoders exist,
-        # also read encoder positions
         # Read encoder positions if available (used for motion tracking)
+        # Used for detecting movement / stuck conditions
         if self.encoders:
             left_enc, right_enc = self.encoders
             data["enc_left"] = left_enc.getValue()

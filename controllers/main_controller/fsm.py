@@ -1,136 +1,158 @@
 from config import *
 
-
 class FSM:
     def __init__(self):
-        # Initial state of the robot
-        self.state = "EXPLORE"
-
-        # Counter to detect if robot is stuck
-        self._stuck_counter = 0
-
-        # Counter used during recovery behaviour
-        self._recovery_counter = 0
-
-        # Previous encoder value for movement detection
-        self._prev_enc_left = None   # for encoder-based motion tracking
+        self.state = "EXPLORE" # Current FSM state
+        self._stuck_counter = 0 # Counter used to detect if robot is stuck
+        self._recovery_counter = 0 # Counter used during recovery behaviour
+        self._prev_enc_left = None   # Previous left encoder value for movement tracking
 
     def update(self, sensor, goal_detected):
-        # GOAL CHECK (highest priority)
+
+        # -------------------------
+        # GOAL STATE
+        # -------------------------
+        # If the goal has been detected, immediately switch to GOAL_REACHED
         if goal_detected:
             self.state = "GOAL_REACHED"
             self._stuck_counter = 0
             return
 
-        # RECOVERY STATE HANDLING
-        # If currently recovering, count down recovery steps
+        # -------------------------
+        # RECOVERY STATE
+        # -------------------------
+        # Recovery behaviour runs for a fixed number of steps
         if self.state == "RECOVERY":
             self._recovery_counter += 1
 
-            # Stay in recovery for fixed number of steps
+            # After recovery is complete, return to EXPLORE mode
             if self._recovery_counter >= RECOVERY_STEPS:
                 self.state = "EXPLORE"
                 self._recovery_counter = 0
                 self._stuck_counter = 0
 
-            # Update encoder baseline to prevent false stuck detection
+            # Update encoder reference
             self._prev_enc_left = sensor.get("enc_left", 0)
             return
 
-        # SENSOR READINGS
+        # Read sensor values
         front = sensor["front"]
         right = sensor["right"]
-        left = sensor["left"]
 
-        ## ENCODER-BASED STUCK DETECTION
+        # -------------------------
+        # ENCODER STUCK CHECK
+        # -------------------------
+        # Detect whether the robot wheels are no longer moving
         curr_enc_left = sensor.get("enc_left", 0)
 
-        # Initialise encoder reference if first run
+        # Store the first encoder value
         if self._prev_enc_left is None:
             self._prev_enc_left = curr_enc_left
 
-        # Detect if robot is not moving (very small encoder change)
-        encoder_not_moving = abs(curr_enc_left - self._prev_enc_left) < 0.01
+        # If encoder change is extremely small, assume robot is stuck
+        encoder_not_moving = abs(curr_enc_left - self._prev_enc_left) < 0.001
 
-        # Update encoder for next cycle
+        # Save current encoder for next cycle
         self._prev_enc_left = curr_enc_left
 
-        # STUCK / OBSTACLE HANDLING
-        # If obstacle in front OR robot not moving -> consider stuck
+        # -------------------------
+        # OBSTACLE / STUCK
+        # -------------------------
+        # Trigger avoidance if:
+        # 1. Front obstacle detected
+        # 2. Robot appears stuck
         if front > FRONT_AVOID_ON or encoder_not_moving:
             self._stuck_counter += 1
 
-            # If stuck too long -> enter recovery mode
+            # If stuck for too long, enter RECOVERY state
             if self._stuck_counter >= STUCK_TIME_LIMIT:
                 self.state = "RECOVERY"
                 self._recovery_counter = 0
+            
+            # Otherwise perform simple avoidance
             else:
-                # Temporary avoidance behaviour
                 self.state = "AVOID"
+
             return
-        
-        # Reset stuck counter if movement is normal
+        # Reset stuck counter if robot is moving normally
         self._stuck_counter = 0
 
-        # WALL DETECTION LOGIC
-        # If wall exists on right side -> follow it
+        # -------------------------
+        # WALL DETECTION
+        # -------------------------
+        # If a wall exists on the right, switch to wall following
         if right > WALL_THRESHOLD:
             self.state = "WALL_FOLLOW"
+
+        # Otherwise continue exploring
         else:
-            # Otherwise explore freely
             self.state = "EXPLORE"
 
     def get_action(self, sensor):
+
+        # Read sensor values
         front = sensor["front"]
         right = sensor["right"]
-        left = sensor["left"]
 
-        # --- GOAL REACHED: stop the robot ---
+        # -------------------------
+        # GOAL
+        # -------------------------
+        # Stop robot when goal reached
         if self.state == "GOAL_REACHED":
             return ("STOP", 0)
 
-        # --- RECOVERY: turn left to escape stuck situation ---
+        # -------------------------
+        # RECOVERY
+        # -------------------------
+        # Turn left continuously during recovery
         if self.state == "RECOVERY":
             return ("TURN_LEFT", 0)
 
-        # --- AVOID: obstacle ahead, turn left ---
+        # -------------------------
+        # AVOID
+        # -------------------------
+        # Simple obstacle (corners or dead-ends) avoidance behaviour
         if self.state == "AVOID":
             return ("TURN_LEFT", 0)
 
-        # --- WALL FOLLOW: adjust direction using left-right sensor difference ---
+        # -------------------------
+        # WALL FOLLOW (FIXED CONTROL)
+        # -------------------------
         if self.state == "WALL_FOLLOW":
-            # Gap opened on the right — turn to follow
-            if right < RIGHT_OPEN_THRESHOLD:
-                return ("TURN_RIGHT", 0)
 
-            # Obstacle ahead while wall following
+            # emergency correction if too close
             if front > FRONT_AVOID_ON:
                 return ("TURN_LEFT", 0)
 
-            # Use left-right difference to adjust balance in corridor
-            diff = left - right
+            # Calculate wall-following error
+            # Positive = too close to wall
+            # Negative = too far from wall
+            error = right - DESIRED_RIGHT
 
-            if diff > WALL_DIFF_STRONG:
-                return ("TURN_RIGHT", 0)
-            elif diff < -WALL_DIFF_STRONG:
-                return ("TURN_LEFT", 0)
-            elif diff > WALL_DIFF_SMALL:
-                return ("SLIGHT_RIGHT", 0)
-            elif diff < -WALL_DIFF_SMALL:
+            # -------------------------
+            # PROPORTIONAL-LIKE CONTROL
+            # -------------------------
+            # Too close to wall
+            if error > WALL_DIFF:
                 return ("SLIGHT_LEFT", 0)
-            else:
-                return ("MOVE_FORWARD", 0)
+            # Too far from wall
+            elif error < -WALL_DIFF:
+                return ("SLIGHT_RIGHT", 0)
+            # Correct distance maintained
+            return ("MOVE_FORWARD", 0)
 
-        # --- EXPLORE: move forward, drift toward right wall if one appears ---
+        # -------------------------
+        # EXPLORE
+        # -------------------------
         if self.state == "EXPLORE":
-
-            # If no wall on right -> try to find one (right-hand rule)
+            
+            # No wall detected on right, search for wall by turning right
             if right < WALL_THRESHOLD:
                 return ("TURN_RIGHT", 0)
 
-            # Avoid obstacle in front
+            # Avoid front obstacle
             if front > FRONT_AVOID_ON:
                 return ("TURN_LEFT", 0)
 
-            # Default forward movement
-            return ("FORWARD", 0)
+            # Continue moving forward
+            return ("MOVE_FORWARD", 0)
