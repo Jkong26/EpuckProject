@@ -18,11 +18,10 @@ All controller implementation files are located inside the `main_controller/` su
 - **main_controller/:**
   - main_controller.py
   - fsm.py
-  - navigation.py
   - movement.py
   - sensors.py
   - config.py
-  - utils.py
+  
 
 ---
 
@@ -52,18 +51,7 @@ All controller implementation files are located inside the `main_controller/` su
 
 ---
 
-### 3. `main_controller/navigation.py`
-
-- **Purpose:** Contains **navigation and decision helper logic**.
-- Processes sensor data to support FSM decisions.
-- Can include:
-  - wall-following logic
-  - multi-condition checks
-  - path decision rules
-
----
-
-### 4. `main_controller/sensors.py`
+### 3. `main_controller/sensors.py`
 
 - **Purpose:** Handles all **sensor data collection**.
 - Reads data from:
@@ -72,7 +60,7 @@ All controller implementation files are located inside the `main_controller/` su
 
 ---
 
-### 5. `main_controller/movement.py`
+### 4. `main_controller/movement.py`
 
 - **Purpose:** Controls the robot’s **actuators (motors)**.
 - Implements movement functions:
@@ -83,23 +71,13 @@ All controller implementation files are located inside the `main_controller/` su
 
 ---
 
-### 6. `main_controller/config.py`
+### 5. `main_controller/config.py`
 
 - **Purpose:** Stores **configuration values**.
 - Includes:
   - sensor thresholds
   - movement speeds
 - Central place for tuning robot behaviour.
-
----
-
-### 7. `main_controller/utils.py` (optional)
-
-- **Purpose:** Contains **helper functions** used across modules.
-- Examples:
-  - math utilities
-  - reusable logic
-- Helps keep code clean and modular.
 
 ---
 
